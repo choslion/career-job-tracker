@@ -38,7 +38,22 @@
     {
       "type": "wanted",
       "name": "원티드",
-      "url": "https://www.wanted.co.kr/api/v4/jobs?country=kr&tag_type_ids=518&job_sort=job.latest_order&locations=all&years=-1&limit=100&offset=0"
+      "url": "https://www.wanted.co.kr/api/v4/jobs?country=kr&tag_type_ids=669&job_sort=job.latest_order&locations=all&years=-1&limit=100&offset=0",
+      "searchQueries": [
+        "웹 퍼블리셔",
+        "퍼블리싱",
+        "프론트엔드 개발자",
+        "UI 개발자",
+        "마크업"
+      ],
+      "tagIds": [669, 873],
+      "maxPages": 3
+    },
+    {
+      "type": "jumpit",
+      "name": "점핏",
+      "url": "https://api.jumpit.co.kr/api/positions?sort=reg_dt&highlight=false&page=1",
+      "maxPages": 30
     },
     {
       "type": "saramin",
@@ -48,13 +63,43 @@
     {
       "type": "saramin",
       "name": "사람인 검색 · 프론트엔드",
-      "url": "https://www.saramin.co.kr/zf_user/search?searchType=search&searchword=%ED%94%84%EB%A1%A0%ED%8A%B8%EC%97%94%EB%93%9C"
+      "url": "https://www.saramin.co.kr/zf_user/search/get-recruit-list?searchword=%ED%94%84%EB%A1%A0%ED%8A%B8%EC%97%94%EB%93%9C&searchType=search&recruitPageCount=40&recruitPage=1",
+      "maxPages": 6
     },
     {
       "type": "saramin",
       "name": "사람인 검색 · 웹퍼블리셔",
-      "url": "https://www.saramin.co.kr/zf_user/search?searchType=search&searchword=%EC%9B%B9%ED%8D%BC%EB%B8%94%EB%A6%AC%EC%85%94"
+      "url": "https://www.saramin.co.kr/zf_user/search/get-recruit-list?searchword=%EC%9B%B9%ED%8D%BC%EB%B8%94%EB%A6%AC%EC%85%94&searchType=search&recruitPageCount=40&recruitPage=1",
+      "maxPages": 6
+    },
+    {
+      "type": "saramin",
+      "name": "사람인 검색 · 퍼블리셔",
+      "url": "https://www.saramin.co.kr/zf_user/search/get-recruit-list?searchword=%ED%8D%BC%EB%B8%94%EB%A6%AC%EC%85%94&searchType=search&recruitPageCount=40&recruitPage=1",
+      "maxPages": 6
+    },
+    {
+      "type": "saramin",
+      "name": "사람인 검색 · 웹퍼블리싱",
+      "url": "https://www.saramin.co.kr/zf_user/search/get-recruit-list?searchword=%EC%9B%B9%ED%8D%BC%EB%B8%94%EB%A6%AC%EC%8B%B1&searchType=search&recruitPageCount=40&recruitPage=1",
+      "maxPages": 6
     }
   ],
-  "companyPages": []
+  "companyPages": [
+    { "name": "엔키화이트햇", "url": "https://enki.career.greetinghr.com/ko" },
+    { "name": "여기어때", "url": "https://gccompany.career.greetinghr.com/ko" },
+    { "name": "고위드", "url": "https://gowid.career.greetinghr.com/ko" },
+    { "name": "인이지", "url": "https://ineeji.career.greetinghr.com/ko" },
+    { "name": "인터엑스", "url": "https://interxlab.career.greetinghr.com/ko" },
+    { "name": "마카롱팩토리", "url": "https://mycle.career.greetinghr.com/ko" },
+    { "name": "누아", "url": "https://nuua.career.greetinghr.com/ko" },
+    { "name": "핀다", "url": "https://finda.career.greetinghr.com/ko" },
+    { "name": "카카오페이", "url": "https://kakaopay.career.greetinghr.com/ko" },
+    { "name": "NHN KCP", "url": "https://kcp.career.greetinghr.com/ko/home" },
+    { "name": "KB핀테크", "url": "https://kbfintech.career.greetinghr.com/ko" },
+    { "name": "넥스트증권", "url": "https://nextsecurities.career.greetinghr.com/ko" },
+    { "name": "클로버추얼패션", "url": "https://jobs.lever.co/clovirtualfashion" },
+    { "name": "Nitra", "url": "https://jobs.lever.co/nitra" },
+    { "name": "Cheiron", "url": "https://jobs.ashbyhq.com/Cheiron" }
+  ]
 }

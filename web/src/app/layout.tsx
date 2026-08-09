@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="ko">
-      <body>
+      <body suppressHydrationWarning>
         <SiteHeader />
         <main>{children}</main>
         <footer className="site-footer">

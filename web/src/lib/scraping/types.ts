@@ -1,9 +1,12 @@
-export type BuiltInSourceType = "jobkorea" | "wanted" | "saramin";
+export type BuiltInSourceType = "jobkorea" | "wanted" | "saramin" | "jumpit";
 
 export interface ScrapeSource {
   type: BuiltInSourceType;
   name: string;
   url: string;
+  searchQueries?: string[];
+  tagIds?: number[];
+  maxPages?: number;
 }
 
 export interface CompanyPageSource {

@@ -13,6 +13,82 @@ import {
 
 const JOB_POSTING_FILE = "job-posting.md";
 
+function normalizeCompany(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLocaleLowerCase("ko")
+    .replace(/주식회사|유한회사|\(?주\)?|㈜|\(유\)|\(재\)/g, "")
+    .replace(/[^\p{Letter}\p{Number}]+/gu, "");
+}
+
+function normalizePosition(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLocaleLowerCase("ko")
+    .replace(/\[[^\]]*(?:채용|모집|경력|신입)[^\]]*]/g, " ")
+    .replace(/\([^)]*(?:채용|모집|경력|신입)[^)]*\)/g, " ")
+    .replace(/(?:상시|수시|긴급)?\s*(?:채용|모집)(?:중)?/g, " ")
+    .replace(/프런트/g, "프론트")
+    .replace(/front[\s_-]*end/g, "frontend")
+    .replace(/웹\s*퍼블리셔/g, "퍼블리셔")
+    .replace(/[^\p{Letter}\p{Number}+#]+/gu, "");
+}
+
+function bigrams(value: string): string[] {
+  if (value.length < 2) return value ? [value] : [];
+  return Array.from({ length: value.length - 1 }, (_, index) => value.slice(index, index + 2));
+}
+
+function titleSimilarity(left: string, right: string): number {
+  const a = normalizePosition(left);
+  const b = normalizePosition(right);
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  if (Math.min(a.length, b.length) >= 9 && (a.includes(b) || b.includes(a))) {
+    return Math.min(a.length, b.length) / Math.max(a.length, b.length);
+  }
+  const rightCounts = new Map<string, number>();
+  for (const gram of bigrams(b)) rightCounts.set(gram, (rightCounts.get(gram) ?? 0) + 1);
+  let overlap = 0;
+  const leftBigrams = bigrams(a);
+  for (const gram of leftBigrams) {
+    const count = rightCounts.get(gram) ?? 0;
+    if (count === 0) continue;
+    overlap += 1;
+    rightCounts.set(gram, count - 1);
+  }
+  return (2 * overlap) / (leftBigrams.length + bigrams(b).length);
+}
+
+function sourcePriority(job: Job): number {
+  if (job.origin === "application") return 0;
+  const source = job.sourceName ?? "";
+  if (source.startsWith("자사채용")) return 1;
+  if (source.includes("원티드")) return 2;
+  if (source.includes("점핏")) return 3;
+  if (source.includes("사람인")) return 4;
+  if (source.includes("잡코리아")) return 5;
+  return 6;
+}
+
+export function dedupeJobs(input: Job[]): Job[] {
+  const jobs: Job[] = [];
+  for (const candidate of input) {
+    const company = normalizeCompany(candidate.company);
+    const existingIndex = jobs.findIndex((job) =>
+      normalizeCompany(job.company) === company && titleSimilarity(job.position, candidate.position) >= 0.9,
+    );
+    if (existingIndex === -1) {
+      jobs.push(candidate);
+      continue;
+    }
+    if (sourcePriority(candidate) < sourcePriority(jobs[existingIndex]!)) {
+      jobs[existingIndex] = candidate;
+    }
+  }
+  return jobs;
+}
+
 export async function detectRelatedDocuments(directory: string): Promise<RelatedDocuments> {
   const entries = await Promise.all(
     Object.entries(RELATED_DOCUMENTS).map(async ([key, definition]) => {
@@ -43,18 +119,7 @@ export async function getJobs(): Promise<JobsResult> {
     combinedJobs.push(...scanned.jobs);
   }
 
-  const seen = new Set<string>();
-  const jobs = combinedJobs.filter((job) => {
-    const semanticIdentity = [job.company, job.position, job.deadline ?? ""]
-      .join("|")
-      .normalize("NFKC")
-      .toLocaleLowerCase("ko")
-      .replace(/[^\p{Letter}\p{Number}|]+/gu, "");
-    const identity = semanticIdentity || job.sourceUrl || `slug:${job.slug}`;
-    if (seen.has(identity)) return false;
-    seen.add(identity);
-    return true;
-  });
+  const jobs = dedupeJobs(combinedJobs);
 
   jobs.sort((a, b) => a.company.localeCompare(b.company, "ko"));
   if (jobs.length > 0) return { state: "ready", jobs, skippedCount };
@@ -130,7 +195,16 @@ async function scanRoot(root: string): Promise<{ available: boolean; jobs: Job[]
   };
 }
 
+export function decodeJobSlug(slug: string): string {
+  try {
+    return decodeURIComponent(slug);
+  } catch {
+    // 잘못된 퍼센트 인코딩은 원문 그대로 조회해 안전하게 not-found 처리한다.
+    return slug;
+  }
+}
+
 export async function getJob(slug: string) {
   const result = await getJobs();
-  return { result, job: result.jobs.find((item) => item.slug === slug) ?? null };
+  return { result, job: result.jobs.find((item) => item.slug === decodeJobSlug(slug)) ?? null };
 }

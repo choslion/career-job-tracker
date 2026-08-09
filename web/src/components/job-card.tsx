@@ -20,7 +20,7 @@ export function JobCard({ job }: { job: Job }) {
       </div>
       <div>
         <p className="job-card__company">{job.company}</p>
-        <h2><Link href={`/jobs/${encodeURIComponent(job.slug)}`}>{job.position}</Link></h2>
+        <h2><Link href={`/jobs/${job.slug}`}>{job.position}</Link></h2>
       </div>
       {job.tags.length > 0 && (
         <ul className="tag-list" aria-label="태그">
@@ -48,7 +48,14 @@ export function JobCard({ job }: { job: Job }) {
         <span>
           {job.deadline ? `${formatKoreanDate(job.deadline)} 마감` : "마감일이 정해지지 않았어요"}
         </span>
-        <Link className="text-link" href={`/jobs/${encodeURIComponent(job.slug)}`}>상세 보기 →</Link>
+        <div className="job-card__actions">
+          <Link className="text-link" href={`/jobs/${job.slug}`}>상세 보기</Link>
+          {job.sourceUrl && (
+            <a className="source-link" href={job.sourceUrl} rel="noopener noreferrer" target="_blank">
+              원문 바로가기 ↗
+            </a>
+          )}
+        </div>
       </div>
     </article>
   );

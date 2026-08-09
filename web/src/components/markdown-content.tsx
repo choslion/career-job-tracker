@@ -16,6 +16,27 @@ function SafeLink({ href, children, ...props }: ComponentPropsWithoutRef<"a">) {
   );
 }
 
+export function normalizeInlineBullets(source: string): string {
+  let inCodeFence = false;
+  return source
+    .split("\n")
+    .map((line) => {
+      if (line.trimStart().startsWith("```")) {
+        inCodeFence = !inCodeFence;
+        return line;
+      }
+      if (inCodeFence || !/[•●▪]/.test(line)) return line;
+
+      const parts = line.split(/\s*[•●▪]\s*/);
+      const introduction = parts.shift()?.trim() ?? "";
+      const items = parts.map((item) => item.trim()).filter(Boolean);
+      if (items.length === 0) return introduction;
+      const list = items.map((item) => `- ${item}`).join("\n");
+      return introduction ? `${introduction}\n\n${list}` : list;
+    })
+    .join("\n");
+}
+
 export function MarkdownContent({ source }: { source: string }) {
   return (
     <div className="markdown-body">
@@ -25,7 +46,7 @@ export function MarkdownContent({ source }: { source: string }) {
         skipHtml
         components={{ a: SafeLink }}
       >
-        {source}
+        {normalizeInlineBullets(source)}
       </ReactMarkdown>
     </div>
   );

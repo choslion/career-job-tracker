@@ -245,7 +245,7 @@ main { min-height: calc(100vh - 146px); }
 
 .filter-panel {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) 170px 170px auto;
+  grid-template-columns: minmax(240px, 1fr) repeat(3, 150px) auto;
   gap: 10px;
   padding: 14px;
   border: 1px solid var(--line);
@@ -276,6 +276,27 @@ main { min-height: calc(100vh - 146px); }
 .view-tabs a span { color: #8b938e; font-size: 10px; }
 .view-tabs a.is-active { color: white; background: var(--green); }
 .view-tabs a.is-active span { color: rgba(255,255,255,.7); }
+.job-shortcuts { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 0 14px; }
+.role-tabs { display: flex; flex-wrap: wrap; gap: 7px; }
+.role-tabs a, .top-jobs-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  color: var(--muted);
+  background: rgba(255,255,255,.74);
+  font-size: 12px;
+  font-weight: 800;
+}
+.role-tabs a span { color: #969e99; font-size: 10px; }
+.role-tabs a:hover, .top-jobs-link:hover { border-color: #b7cbbf; color: var(--green); }
+.role-tabs a.is-active { border-color: #bcd4c6; color: var(--green); background: var(--green-soft); }
+.top-jobs-link { color: #785910; background: #fbf4e4; }
+.top-jobs-link.is-active { border-color: #d8bd79; color: #684900; background: #f5e7bf; }
+.filter-panel--with-status { grid-template-columns: minmax(220px, 1fr) repeat(4, 140px) auto; }
 .filter-panel input, .filter-panel select {
   width: 100%;
   height: 46px;
@@ -321,6 +342,9 @@ main { min-height: calc(100vh - 146px); }
 .tag-list li { padding: 5px 9px; border: 1px solid #e0e5e1; border-radius: 8px; color: #5f6963; background: #f8f9f7; font-size: 11px; }
 .job-card__footer { padding-top: 17px; border-top: 1px solid #e9edea; }
 .job-card__footer > span { color: var(--muted); font-size: 11px; }
+.job-card__actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.source-link { padding: 7px 10px; border-radius: 9px; color: white; background: var(--green); font-size: 11px; font-weight: 800; white-space: nowrap; }
+.source-link:hover { background: #0f573e; }
 .match-summary { padding: 13px 14px; border-radius: 12px; background: #f4f8f5; }
 .match-summary > strong { display: block; margin-bottom: 7px; color: var(--green); font-size: 12px; }
 .match-summary ul { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 0; list-style: none; }
@@ -386,8 +410,8 @@ main { min-height: calc(100vh - 146px); }
 .markdown-body h2 { margin: 40px 0 12px; color: var(--ink); font-size: 22px; letter-spacing: -0.03em; }
 .markdown-body h3 { margin: 30px 0 8px; color: var(--ink); font-size: 17px; }
 .markdown-body p { margin: 14px 0; }
-.markdown-body ul, .markdown-body ol { padding-left: 22px; }
-.markdown-body li { margin: 7px 0; }
+.markdown-body ul, .markdown-body ol { margin: 14px 0 20px; padding-left: 24px; }
+.markdown-body li { margin: 9px 0; padding-left: 3px; line-height: 1.72; }
 .markdown-body a { color: var(--green); text-decoration: underline; text-underline-offset: 3px; }
 .markdown-body blockquote { margin: 22px 0; padding: 2px 18px; border-left: 3px solid #a9c7b7; color: var(--muted); background: #f6f8f6; }
 .markdown-body code { padding: 2px 5px; border-radius: 5px; background: #eef2ef; font-size: .88em; }
@@ -404,6 +428,7 @@ main { min-height: calc(100vh - 146px); }
   .hero { min-height: auto; padding: 38px; flex-direction: column; align-items: flex-start; }
   .summary-grid { grid-template-columns: repeat(2, 1fr); }
   .filter-panel { grid-template-columns: 1fr 1fr; }
+  .filter-panel--with-status { grid-template-columns: 1fr 1fr; }
   .search-field { grid-column: 1 / -1; }
   .jobs-grid { grid-template-columns: 1fr; }
   .jobs-grid--preview { grid-template-columns: 1fr 1fr; }
@@ -434,6 +459,12 @@ main { min-height: calc(100vh - 146px); }
   .search-field { grid-column: auto; }
   .job-card { padding: 20px; }
   .job-card__footer > span { max-width: 60%; }
+  .job-shortcuts { align-items: stretch; flex-direction: column; }
+  .role-tabs { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .role-tabs a, .top-jobs-link { justify-content: center; }
+  .job-card__footer { align-items: flex-start; flex-direction: column; }
+  .job-card__footer > span { max-width: none; }
+  .job-card__actions { width: 100%; justify-content: space-between; }
   .detail-hero { padding: 28px 22px; }
   .detail-meta { grid-template-columns: 1fr 1fr; }
   .content-card { padding: 28px 22px; }

@@ -62,4 +62,53 @@ describe("filterAndSortJobs", () => {
   it("최근 수정 순으로 정렬한다", () => {
     expect(filterAndSortJobs(jobs, { sort: "updated-desc" })[0]?.slug).toBe("earlier");
   });
+
+  it("퍼블리싱과 프론트엔드 직무를 따로 필터링한다", () => {
+    const roleJobs = [
+      job({ slug: "publisher", position: "웹 퍼블리셔" }),
+      job({ slug: "frontend", position: "Frontend Developer" }),
+      job({ slug: "hybrid", position: "웹 퍼블리셔 / 프론트엔드 개발자" }),
+      job({ slug: "backend", position: "Backend Developer" }),
+    ];
+
+    expect(filterAndSortJobs(roleJobs, { role: "publishing" }).map((item) => item.slug)).toEqual([
+      "publisher",
+      "hybrid",
+    ]);
+    expect(filterAndSortJobs(roleJobs, { role: "frontend" }).map((item) => item.slug)).toEqual([
+      "frontend",
+      "hybrid",
+    ]);
+  });
+
+  it("프로필 일치 점수가 높은 공고를 먼저 둔다", () => {
+    const ranked = [
+      job({ slug: "low", matchScore: 3 }),
+      job({ slug: "high", matchScore: 30 }),
+      job({ slug: "middle", matchScore: 12 }),
+    ];
+
+    expect(filterAndSortJobs(ranked, { sort: "match-desc" }).map((item) => item.slug)).toEqual([
+      "high",
+      "middle",
+      "low",
+    ]);
+  });
+
+  it("기본 목록에서는 서울·경기 공고를 먼저, 다른 지역 공고를 마지막에 둔다", () => {
+    const locationJobs = [
+      job({ slug: "seoul", body: "근무지 서울 강남구" }),
+      job({ slug: "gyeonggi", tags: ["경기 성남시"] }),
+      job({ slug: "busan", body: "근무지 부산 해운대구" }),
+      job({ slug: "unknown", body: "근무지는 협의 후 결정" }),
+    ];
+
+    expect(filterAndSortJobs(locationJobs, {}).map((item) => item.slug)).toEqual([
+      "seoul",
+      "gyeonggi",
+      "unknown",
+      "busan",
+    ]);
+    expect(filterAndSortJobs(locationJobs, { location: "all" })).toHaveLength(4);
+  });
 });

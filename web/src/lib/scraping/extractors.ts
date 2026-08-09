@@ -186,7 +186,8 @@ export function extractSaraminJob(html: string, pageUrl: string, source: string)
 }
 
 export function extractWantedListIds(payload: unknown, keywords: string[], limit: number): string[] {
-  const data = asRecord(payload)?.data;
+  const rawData = asRecord(payload)?.data;
+  const data = Array.isArray(rawData) ? rawData : asRecord(rawData)?.jobs;
   if (!Array.isArray(data)) return [];
 
   return data.flatMap((item, index) => {
@@ -204,6 +205,213 @@ export function extractWantedListIds(payload: unknown, keywords: string[], limit
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .slice(0, limit)
     .map((item) => item.id);
+}
+
+export function extractJumpitJobs(payload: unknown, source: string): ScrapedJob[] {
+  const positions = asRecord(asRecord(payload)?.result)?.positions;
+  if (!Array.isArray(positions)) return [];
+
+  return positions.flatMap((value) => {
+    const item = asRecord(value);
+    const id = item?.id;
+    const position = text(item?.title);
+    const company = text(item?.companyName);
+    if (!id || !position || !company) return [];
+
+    const locations = Array.isArray(item.locations)
+      ? item.locations.map(text).filter(Boolean)
+      : [];
+    const stacks = Array.isArray(item.techStacks)
+      ? item.techStacks.map(text).filter(Boolean).slice(0, 10)
+      : [];
+    const minimum = typeof item.minCareer === "number" ? item.minCareer : null;
+    const maximum = typeof item.maxCareer === "number" ? item.maxCareer : null;
+    const career = minimum === null
+      ? ""
+      : maximum === null || maximum >= 99
+        ? `경력 ${minimum}년 이상`
+        : `경력 ${minimum}~${maximum}년`;
+    const deadline = item.alwaysOpen === true ? null : normalizeDeadline(item.closedAt);
+
+    return [{
+      source,
+      externalId: String(id),
+      company,
+      position,
+      sourceUrl: `https://jumpit.saramin.co.kr/position/${encodeURIComponent(String(id))}`,
+      deadline,
+      tags: [source, ...stacks],
+      description: [
+        locations.length > 0 ? `근무지 · ${locations.join(", ")}` : "",
+        career,
+        text(item.jobCategory) ? `직무 · ${text(item.jobCategory)}` : "",
+        stacks.length > 0 ? `기술 · ${stacks.join(", ")}` : "",
+      ].filter(Boolean).join("\n\n") || "공고 원문에서 자세한 내용을 확인해 주세요.",
+    }];
+  });
+}
+
+function publicAtsDescription(parts: unknown[]): string {
+  const readable = parts
+    .map((part) => text(part) ? htmlToReadableText(text(part)) : "")
+    .filter(Boolean)
+    .join("\n\n");
+  return readable || "공고 원문에서 자세한 내용을 확인해 주세요.";
+}
+
+export function extractLeverJobs(payload: unknown, companyName: string, source: string): ScrapedJob[] {
+  if (!Array.isArray(payload)) return [];
+  return payload.flatMap((value) => {
+    const item = asRecord(value);
+    const categories = asRecord(item?.categories);
+    const id = item?.id;
+    const position = text(item?.text);
+    const sourceUrl = text(item?.hostedUrl);
+    if (!id || !position || !sourceUrl) return [];
+    const location = text(categories?.location);
+    const commitment = text(categories?.commitment);
+    return [{
+      source,
+      externalId: String(id),
+      company: companyName,
+      position,
+      sourceUrl,
+      deadline: null,
+      tags: [source, location, commitment].filter(Boolean),
+      description: publicAtsDescription([
+        item.descriptionPlain,
+        item.description,
+        item.additionalPlain,
+        item.additional,
+      ]),
+    }];
+  });
+}
+
+export function extractAshbyJobs(payload: unknown, companyName: string, source: string): ScrapedJob[] {
+  const jobs = asRecord(payload)?.jobs;
+  if (!Array.isArray(jobs)) return [];
+  return jobs.flatMap((value) => {
+    const item = asRecord(value);
+    if (item?.isListed === false) return [];
+    const id = item?.id;
+    const position = text(item?.title);
+    const sourceUrl = text(item?.jobUrl);
+    if (!id || !position || !sourceUrl) return [];
+    const location = text(item.location);
+    const employment = text(item.employmentType);
+    return [{
+      source,
+      externalId: String(id),
+      company: companyName,
+      position,
+      sourceUrl,
+      deadline: null,
+      tags: [source, location, employment].filter(Boolean),
+      description: publicAtsDescription([item.descriptionPlain, item.descriptionHtml]),
+    }];
+  });
+}
+
+export function extractGreenhouseJobs(payload: unknown, companyName: string, source: string): ScrapedJob[] {
+  const jobs = asRecord(payload)?.jobs;
+  if (!Array.isArray(jobs)) return [];
+  return jobs.flatMap((value) => {
+    const item = asRecord(value);
+    const location = asRecord(item?.location);
+    const id = item?.id;
+    const position = text(item?.title);
+    const sourceUrl = text(item?.absolute_url);
+    if (!id || !position || !sourceUrl) return [];
+    const locationName = text(location?.name);
+    return [{
+      source,
+      externalId: String(id),
+      company: companyName,
+      position,
+      sourceUrl,
+      deadline: null,
+      tags: [source, locationName].filter(Boolean),
+      description: publicAtsDescription([item.content]),
+    }];
+  });
+}
+
+function greetingOpenings(payload: unknown): Record<string, unknown>[] {
+  const props = asRecord(asRecord(payload)?.props);
+  const pageProps = asRecord(props?.pageProps);
+  const dehydratedState = asRecord(pageProps?.dehydratedState);
+  const queries = dehydratedState?.queries;
+  if (!Array.isArray(queries)) return [];
+
+  for (const value of queries) {
+    const query = asRecord(value);
+    const queryKey = query?.queryKey;
+    const queryHash = text(query?.queryHash);
+    const isOpenings = (Array.isArray(queryKey) && queryKey[0] === "openings") || queryHash === '["openings"]';
+    if (!isOpenings) continue;
+    const data = asRecord(query?.state)?.data;
+    if (Array.isArray(data)) return data.map(asRecord).filter((item): item is Record<string, unknown> => Boolean(item));
+  }
+  return [];
+}
+
+function greetingMeta(opening: Record<string, unknown>): { tags: string[]; description: string } {
+  const openingPosition = asRecord(opening.openingJobPosition);
+  const positions = openingPosition?.openingJobPositions;
+  if (!Array.isArray(positions)) return { tags: [], description: "" };
+  const tags: string[] = [];
+  const descriptions: string[] = [];
+
+  for (const value of positions) {
+    const position = asRecord(value);
+    const place = asRecord(position?.workspacePlace);
+    const location = [text(place?.place), text(place?.detailPlace)].filter(Boolean).join(" ");
+    if (location) tags.push(location);
+    const employment = text(asRecord(position?.jobPositionEmployment)?.employmentType);
+    if (employment) tags.push(employment);
+    const career = asRecord(position?.jobPositionCareer);
+    const careerType = text(career?.careerType);
+    if (careerType === "NOT_MATTER") descriptions.push("경력 무관");
+    else if (careerType === "NEW_COMER") descriptions.push("신입");
+    else if (career) {
+      const from = typeof career.careerFrom === "number" ? career.careerFrom : null;
+      const to = typeof career.careerTo === "number" ? career.careerTo : null;
+      if (from !== null) descriptions.push(to === null ? `경력 ${from}년 이상` : `경력 ${from}~${to}년`);
+    }
+  }
+  return { tags: [...new Set(tags)], description: [...new Set(descriptions)].join(" · ") };
+}
+
+export function extractGreetingJobs(html: string, baseUrl: string, fallbackCompany: string, source: string): ScrapedJob[] {
+  const $ = load(html);
+  const script = $('script#__NEXT_DATA__').text();
+  if (!script) return [];
+  let payload: unknown;
+  try {
+    payload = JSON.parse(script);
+  } catch {
+    return [];
+  }
+  const origin = new URL(baseUrl).origin;
+  return greetingOpenings(payload).flatMap((opening) => {
+    if (opening.deploy === false) return [];
+    const id = opening.openingId;
+    const position = text(opening.title);
+    const company = text(asRecord(opening.group)?.name) || fallbackCompany;
+    if (!id || !position || !company) return [];
+    const meta = greetingMeta(opening);
+    return [{
+      source,
+      externalId: String(id),
+      company,
+      position,
+      sourceUrl: `${origin}/ko/o/${encodeURIComponent(String(id))}`,
+      deadline: normalizeDeadline(opening.dueDate),
+      tags: [source, ...meta.tags],
+      description: meta.description || "공고 원문에서 자세한 내용을 확인해 주세요.",
+    }];
+  });
 }
 
 export function extractWantedJob(payload: unknown, pageUrl: string, source: string): ScrapedJob | null {

@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  extractAshbyJobs,
+  extractGreetingJobs,
   extractJsonLdJobs,
+  extractJumpitJobs,
+  extractLeverJobs,
   extractListingLinks,
   extractSaraminJob,
   extractWantedJob,
@@ -67,6 +71,106 @@ describe("공개 채용공고 추출", () => {
 
     expect(job).toMatchObject({ company: "Example", position: "Frontend Developer", deadline: null });
     expect(job?.description).toContain("## 주요 업무");
+  });
+
+  it("원티드 검색 응답의 중첩 jobs 목록도 읽는다", () => {
+    const payload = {
+      data: {
+        jobs: [
+          { id: 20, position: "웹 퍼블리셔", company: { name: "Example" } },
+          { id: 21, position: "Sales", company: { name: "Example" } },
+        ],
+      },
+    };
+
+    expect(extractWantedListIds(payload, ["퍼블리셔"], 10)).toEqual(["20"]);
+  });
+
+  it("점핏 공개 목록을 공통 공고 형식으로 변환한다", () => {
+    const jobs = extractJumpitJobs({
+      result: {
+        positions: [{
+          id: 30,
+          title: "Frontend Engineer",
+          companyName: "Example",
+          locations: ["서울"],
+          minCareer: 2,
+          maxCareer: 5,
+          alwaysOpen: true,
+          techStacks: ["Vue.js", "TypeScript"],
+        }],
+      },
+    }, "점핏");
+
+    expect(jobs[0]).toMatchObject({
+      externalId: "30",
+      company: "Example",
+      deadline: null,
+      tags: ["점핏", "Vue.js", "TypeScript"],
+    });
+    expect(jobs[0]?.description).toContain("경력 2~5년");
+  });
+
+  it("Lever와 Ashby 공개 Job Board 응답을 변환한다", () => {
+    expect(extractLeverJobs([{
+      id: "lever-1",
+      text: "Frontend Engineer",
+      hostedUrl: "https://jobs.lever.co/example/lever-1",
+      categories: { location: "Seoul", commitment: "Full-time" },
+      descriptionPlain: "React와 TypeScript 개발",
+    }], "Example", "자사채용 · Example")[0]).toMatchObject({
+      company: "Example",
+      position: "Frontend Engineer",
+    });
+
+    expect(extractAshbyJobs({ jobs: [{
+      id: "ashby-1",
+      title: "Web Publisher",
+      jobUrl: "https://jobs.ashbyhq.com/example/ashby-1",
+      location: "Seoul",
+      isListed: true,
+      descriptionPlain: "HTML과 CSS",
+    }] }, "Example", "자사채용 · Example")[0]).toMatchObject({
+      externalId: "ashby-1",
+      position: "Web Publisher",
+    });
+  });
+
+  it("Greeting 공개 목록의 채용 정보를 변환한다", () => {
+    const payload = {
+      props: {
+        pageProps: {
+          dehydratedState: {
+            queries: [{
+              queryKey: ["openings"],
+              state: {
+                data: [{
+                  openingId: 40,
+                  title: "프론트엔드 개발자",
+                  dueDate: "2026-08-31T23:59:59+09:00",
+                  group: { name: "Example" },
+                  openingJobPosition: {
+                    openingJobPositions: [{
+                      workspacePlace: { place: "서울", detailPlace: "강남구" },
+                      jobPositionCareer: { careerType: "EXPERIENCED", careerFrom: 2, careerTo: 5 },
+                    }],
+                  },
+                }],
+              },
+            }],
+          },
+        },
+      },
+    };
+    const html = `<script id="__NEXT_DATA__" type="application/json">${JSON.stringify(payload)}</script>`;
+    const jobs = extractGreetingJobs(html, "https://example.career.greetinghr.com/ko", "Fallback", "자사채용 · Example");
+
+    expect(jobs[0]).toMatchObject({
+      externalId: "40",
+      company: "Example",
+      deadline: "2026-08-31",
+    });
+    expect(jobs[0]?.description).toContain("경력 2~5년");
   });
 
   it("사람인 메타 정보에서 회사·공고명·마감일을 읽는다", () => {

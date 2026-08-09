@@ -6,7 +6,12 @@ import { dump as dumpYaml } from "js-yaml";
 import robotsParser from "robots-parser";
 
 import {
+  extractAshbyJobs,
+  extractGreenhouseJobs,
+  extractGreetingJobs,
   extractJsonLdJobs,
+  extractJumpitJobs,
+  extractLeverJobs,
   extractListingLinks,
   extractSaraminJob,
   extractWantedJob,
@@ -35,8 +40,11 @@ const LOCAL_PROFILE_FILE = path.resolve(process.cwd(), ".local", "search-profile
 const DEFAULT_PROFILE_FILE = path.resolve(process.cwd(), "..", "..", "career-workbench", "job-search.yaml");
 
 let requestDelayMs = 800;
-let lastRequestAt = 0;
 const robotsCache = new Map<string, ReturnType<typeof robotsParser> | null>();
+const robotsLoads = new Map<string, Promise<boolean>>();
+const requestQueues = new Map<string, Promise<void>>();
+const lastRequestAtByOrigin = new Map<string, number>();
+const detailTextCache = new Map<string, Promise<string>>();
 
 function log(message: string) {
   console.log(`[공고 수집] ${message}`);
@@ -50,15 +58,22 @@ function delay(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-async function throttle() {
-  const remaining = requestDelayMs - (Date.now() - lastRequestAt);
-  if (remaining > 0) await delay(remaining);
-  lastRequestAt = Date.now();
+async function throttle(url: string) {
+  const origin = new URL(url).origin;
+  const previous = requestQueues.get(origin) ?? Promise.resolve();
+  const current = previous.catch(() => undefined).then(async () => {
+    const previousRequestAt = lastRequestAtByOrigin.get(origin) ?? 0;
+    const remaining = requestDelayMs - (Date.now() - previousRequestAt);
+    if (remaining > 0) await delay(remaining);
+    lastRequestAtByOrigin.set(origin, Date.now());
+  });
+  requestQueues.set(origin, current);
+  await current;
 }
 
 async function request(url: string, redirects = 0): Promise<Response> {
   if (redirects > 3) throw new Error("리디렉션이 너무 많습니다.");
-  await throttle();
+  await throttle(url);
 
   const response = await fetch(url, {
     headers: {
@@ -94,32 +109,53 @@ async function fetchJson(url: string): Promise<unknown> {
   return JSON.parse(await fetchText(url));
 }
 
+async function fetchDetailText(url: string): Promise<string> {
+  const cached = detailTextCache.get(url);
+  if (cached) return cached;
+  const pending = fetchText(url).catch((error) => {
+    detailTextCache.delete(url);
+    throw error;
+  });
+  detailTextCache.set(url, pending);
+  return pending;
+}
+
+async function loadRobots(origin: string, hostname: string): Promise<boolean> {
+  try {
+    const robotsUrl = new URL("/robots.txt", origin).toString();
+    await throttle(robotsUrl);
+    const response = await fetch(robotsUrl, {
+      headers: { "User-Agent": USER_AGENT, Accept: "text/plain" },
+      redirect: "follow",
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (response.ok) {
+      robotsCache.set(origin, robotsParser(robotsUrl, await response.text()));
+      return true;
+    }
+    if (response.status >= 400 && response.status < 500) {
+      // RFC 9309: robots.txt의 4xx는 unavailable로 보고 접근 제한이 없는 것으로 처리한다.
+      robotsCache.set(origin, null);
+      return true;
+    }
+    warn(`${hostname}의 robots.txt를 확인하지 못해 이 사이트를 건너뜁니다.`);
+    return false;
+  } catch {
+    warn(`${hostname}의 robots.txt 요청에 실패해 이 사이트를 건너뜁니다.`);
+    return false;
+  }
+}
+
 async function isAllowedByRobots(url: string): Promise<boolean> {
   const target = new URL(url);
   const origin = target.origin;
   if (!robotsCache.has(origin)) {
-    try {
-      await throttle();
-      const robotsUrl = new URL("/robots.txt", origin).toString();
-      const response = await fetch(robotsUrl, {
-        headers: { "User-Agent": USER_AGENT, Accept: "text/plain" },
-        redirect: "follow",
-        signal: AbortSignal.timeout(10_000),
-      });
-
-      if (response.ok) {
-        robotsCache.set(origin, robotsParser(robotsUrl, await response.text()));
-      } else if (response.status >= 400 && response.status < 500) {
-        // RFC 9309: robots.txt의 4xx는 unavailable로 보고 접근 제한이 없는 것으로 처리한다.
-        robotsCache.set(origin, null);
-      } else {
-        warn(`${target.hostname}의 robots.txt를 확인하지 못해 이 사이트를 건너뜁니다.`);
-        return false;
-      }
-    } catch {
-      warn(`${target.hostname}의 robots.txt 요청에 실패해 이 사이트를 건너뜁니다.`);
-      return false;
-    }
+    const existing = robotsLoads.get(origin);
+    const pending = existing ?? loadRobots(origin, target.hostname);
+    if (!existing) robotsLoads.set(origin, pending);
+    const loaded = await pending.finally(() => robotsLoads.delete(origin));
+    if (!loaded) return false;
   }
 
   const robots = robotsCache.get(origin);
@@ -148,7 +184,7 @@ async function readConfig(): Promise<ScrapeConfig> {
     : [];
   const sources = Array.isArray(raw.sources)
     ? raw.sources.filter((item): item is ScrapeSource =>
-      Boolean(item && ["jobkorea", "wanted", "saramin"].includes(item.type) && item.name && isHttpsUrl(item.url)),
+      Boolean(item && ["jobkorea", "wanted", "saramin", "jumpit"].includes(item.type) && item.name && isHttpsUrl(item.url)),
     )
     : [];
   const companyPages = Array.isArray(raw.companyPages)
@@ -250,6 +286,10 @@ function reachedTarget(jobs: ScrapedJob[], profile: SearchProfile | null, limit:
   return selectedJobs(jobs, profile, limit).length >= limit;
 }
 
+function sourcePageLimit(source: ScrapeSource, config: ScrapeConfig): number {
+  return clampInteger(source.maxPages, config.maxListingPages, 1, 60);
+}
+
 async function scrapeJobKorea(
   source: ScrapeSource,
   config: ScrapeConfig,
@@ -273,7 +313,7 @@ async function scrapeJobKorea(
   for (const link of links) {
     if (!(await isAllowedByRobots(link))) continue;
     try {
-      jobs.push(...extractJsonLdJobs(await fetchText(link), link, source.name));
+      jobs.push(...extractJsonLdJobs(await fetchDetailText(link), link, source.name));
     } catch {
       continue;
     }
@@ -289,14 +329,25 @@ async function scrapeSaramin(
   profile: SearchProfile | null,
 ): Promise<ScrapedJob[]> {
   const listings: string[] = [];
-  for (let page = 1; page <= config.maxListingPages; page += 1) {
+  const isSearchApi = new URL(source.url).pathname.includes("/search/get-recruit-list");
+  for (let page = 1; page <= sourcePageLimit(source, config); page += 1) {
     const pageUrl = new URL(source.url);
-    if (page > 1) {
+    if (isSearchApi) {
+      pageUrl.searchParams.set("recruitPage", String(page));
+      pageUrl.searchParams.set("recruitPageCount", "40");
+    } else if (page > 1) {
       pageUrl.searchParams.set("page", String(page));
       pageUrl.searchParams.set("page_count", "50");
     }
     if (!(await isAllowedByRobots(pageUrl.toString()))) continue;
-    listings.push(await fetchText(pageUrl.toString()));
+    if (isSearchApi) {
+      const payload = await fetchJson(pageUrl.toString()) as { innerHTML?: unknown };
+      const innerHtml = typeof payload.innerHTML === "string" ? payload.innerHTML : "";
+      if (!innerHtml) break;
+      listings.push(innerHtml);
+    } else {
+      listings.push(await fetchText(pageUrl.toString()));
+    }
   }
   const links = extractListingLinks(
     listings.join("\n"),
@@ -309,7 +360,7 @@ async function scrapeSaramin(
   for (const link of links) {
     if (!(await isAllowedByRobots(link))) continue;
     try {
-      const job = extractSaraminJob(await fetchText(link), link, source.name);
+      const job = extractSaraminJob(await fetchDetailText(link), link, source.name);
       if (job) jobs.push(job);
     } catch {
       continue;
@@ -327,25 +378,67 @@ async function scrapeWanted(
 ): Promise<ScrapedJob[]> {
   const ids: string[] = [];
   const seenIds = new Set<string>();
-  const initialUrl = new URL(source.url);
-  const pageSize = clampInteger(Number(initialUrl.searchParams.get("limit")), 100, 1, 100);
-  const initialOffset = clampInteger(Number(initialUrl.searchParams.get("offset")), 0, 0, 100_000);
-
-  for (let page = 0; page < config.maxListingPages && ids.length < config.candidateLimitPerSource; page += 1) {
-    const pageUrl = new URL(source.url);
-    pageUrl.searchParams.set("limit", String(pageSize));
-    pageUrl.searchParams.set("offset", String(initialOffset + page * pageSize));
-    const pageIds = extractWantedListIds(
-      await fetchJson(pageUrl.toString()),
-      config.keywords,
-      config.candidateLimitPerSource,
-    );
+  const addIds = (pageIds: string[]) => {
     for (const id of pageIds) {
-      if (seenIds.has(id)) continue;
+      if (seenIds.has(id) || ids.length >= config.candidateLimitPerSource) continue;
       seenIds.add(id);
       ids.push(id);
     }
-    if (pageIds.length === 0) continue;
+  };
+  const queries = (source.searchQueries ?? []).filter(Boolean).slice(0, 10);
+  const tagIds = (source.tagIds ?? []).filter((value) => Number.isInteger(value) && value > 0).slice(0, 10);
+  const pages = sourcePageLimit(source, config);
+
+  if (queries.length > 0 || tagIds.length > 0) {
+    for (let page = 0; page < pages && ids.length < config.candidateLimitPerSource; page += 1) {
+      for (const query of queries) {
+        const pageUrl = new URL("https://www.wanted.co.kr/api/v4/search");
+        pageUrl.searchParams.set("query", query);
+        pageUrl.searchParams.set("country", "kr");
+        pageUrl.searchParams.set("job_sort", "job.latest_order");
+        pageUrl.searchParams.set("tab", "position");
+        pageUrl.searchParams.set("limit", "100");
+        pageUrl.searchParams.set("offset", String(page * 100));
+        if (!(await isAllowedByRobots(pageUrl.toString()))) continue;
+        addIds(extractWantedListIds(
+          await fetchJson(pageUrl.toString()),
+          config.keywords,
+          config.candidateLimitPerSource,
+        ));
+      }
+      for (const tagId of tagIds) {
+        const pageUrl = new URL("https://www.wanted.co.kr/api/v4/jobs");
+        pageUrl.searchParams.set("country", "kr");
+        pageUrl.searchParams.set("tag_type_ids", String(tagId));
+        pageUrl.searchParams.set("job_sort", "job.latest_order");
+        pageUrl.searchParams.set("years", "-1");
+        pageUrl.searchParams.set("locations", "all");
+        pageUrl.searchParams.set("limit", "100");
+        pageUrl.searchParams.set("offset", String(page * 100));
+        if (!(await isAllowedByRobots(pageUrl.toString()))) continue;
+        addIds(extractWantedListIds(
+          await fetchJson(pageUrl.toString()),
+          config.keywords,
+          config.candidateLimitPerSource,
+        ));
+      }
+    }
+  } else {
+    const initialUrl = new URL(source.url);
+    const parsedPageSize = Number(initialUrl.searchParams.get("limit"));
+    const parsedOffset = Number(initialUrl.searchParams.get("offset"));
+    const pageSize = clampInteger(parsedPageSize || undefined, 100, 1, 100);
+    const initialOffset = clampInteger(parsedOffset || undefined, 0, 0, 100_000);
+    for (let page = 0; page < pages && ids.length < config.candidateLimitPerSource; page += 1) {
+      const pageUrl = new URL(source.url);
+      pageUrl.searchParams.set("limit", String(pageSize));
+      pageUrl.searchParams.set("offset", String(initialOffset + page * pageSize));
+      addIds(extractWantedListIds(
+        await fetchJson(pageUrl.toString()),
+        config.keywords,
+        config.candidateLimitPerSource,
+      ));
+    }
   }
 
   const jobs: ScrapedJob[] = [];
@@ -365,6 +458,30 @@ async function scrapeWanted(
   return jobs;
 }
 
+async function scrapeJumpit(
+  source: ScrapeSource,
+  config: ScrapeConfig,
+  profile: SearchProfile | null,
+): Promise<ScrapedJob[]> {
+  const jobs: ScrapedJob[] = [];
+  const seen = new Set<string>();
+  for (let page = 1; page <= sourcePageLimit(source, config); page += 1) {
+    const pageUrl = new URL(source.url);
+    pageUrl.searchParams.set("page", String(page));
+    if (!(await isAllowedByRobots(pageUrl.toString()))) continue;
+    const pageJobs = extractJumpitJobs(await fetchJson(pageUrl.toString()), source.name);
+    if (pageJobs.length === 0) break;
+    for (const job of pageJobs) {
+      if (seen.has(job.externalId)) continue;
+      seen.add(job.externalId);
+      jobs.push(job);
+    }
+    if (reachedTarget(jobs, profile, config.maxItemsPerSource)) break;
+  }
+  log(`${source.name}: 목록 ${jobs.length}개 확인`);
+  return jobs;
+}
+
 async function scrapeBuiltInSource(
   source: ScrapeSource,
   config: ScrapeConfig,
@@ -376,6 +493,7 @@ async function scrapeBuiltInSource(
   }
   if (source.type === "jobkorea") return scrapeJobKorea(source, config, profile);
   if (source.type === "wanted") return scrapeWanted(source, config, profile);
+  if (source.type === "jumpit") return scrapeJumpit(source, config, profile);
   return scrapeSaramin(source, config, profile);
 }
 
@@ -387,6 +505,28 @@ async function scrapeCompanyPage(
   if (!(await isAllowedByRobots(source.url))) {
     warn(`${source.name} 채용 페이지는 robots.txt에서 허용하지 않아 건너뜁니다.`);
     return [];
+  }
+
+  const parsedSource = new URL(source.url);
+  const sourceLabel = `자사채용 · ${source.name}`;
+  const pathSegments = parsedSource.pathname.split("/").filter(Boolean);
+  if (parsedSource.hostname.endsWith(".career.greetinghr.com")) {
+    return extractGreetingJobs(await fetchText(source.url), source.url, source.name, sourceLabel);
+  }
+  if (parsedSource.hostname === "jobs.lever.co" && pathSegments[0]) {
+    const apiUrl = `https://api.lever.co/v0/postings/${encodeURIComponent(pathSegments[0])}?mode=json`;
+    if (!(await isAllowedByRobots(apiUrl))) return [];
+    return extractLeverJobs(await fetchJson(apiUrl), source.name, sourceLabel);
+  }
+  if (parsedSource.hostname === "jobs.ashbyhq.com" && pathSegments[0]) {
+    const apiUrl = `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(pathSegments[0])}`;
+    if (!(await isAllowedByRobots(apiUrl))) return [];
+    return extractAshbyJobs(await fetchJson(apiUrl), source.name, sourceLabel);
+  }
+  if (["job-boards.greenhouse.io", "boards.greenhouse.io"].includes(parsedSource.hostname) && pathSegments[0]) {
+    const apiUrl = `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(pathSegments[0])}/jobs?content=true`;
+    if (!(await isAllowedByRobots(apiUrl))) return [];
+    return extractGreenhouseJobs(await fetchJson(apiUrl), source.name, sourceLabel);
   }
 
   const html = await fetchText(source.url);
@@ -501,27 +641,34 @@ async function main() {
     return;
   }
 
-  const jobs: ScrapedJob[] = [];
-  for (const source of config.sources) {
+  const scrapeBuiltIn = async (source: ScrapeSource): Promise<ScrapedJob[]> => {
     try {
       const scraped = await scrapeBuiltInSource(source, config, profile);
       const found = selectedJobs(scraped, profile, config.maxItemsPerSource);
-      jobs.push(...found);
       log(`${source.name}: ${found.length}개 수집`);
+      return found;
     } catch (error) {
       warn(`${source.name}: ${error instanceof Error ? error.message : "수집 실패"}`);
+      return [];
     }
-  }
-  for (const source of config.companyPages) {
+  };
+  const scrapeCompany = async (source: CompanyPageSource): Promise<ScrapedJob[]> => {
     try {
       const scraped = await scrapeCompanyPage(source, config, profile);
       const found = selectedJobs(scraped, profile, config.maxItemsPerSource);
-      jobs.push(...found);
       log(`${source.name}: ${found.length}개 수집`);
+      return found;
     } catch (error) {
       warn(`${source.name}: ${error instanceof Error ? error.message : "수집 실패"}`);
+      return [];
     }
-  }
+  };
+
+  const [builtInResults, companyResults] = await Promise.all([
+    Promise.all(config.sources.map(scrapeBuiltIn)),
+    Promise.all(config.companyPages.map(scrapeCompany)),
+  ]);
+  const jobs = [...builtInResults.flat(), ...companyResults.flat()];
 
   const unique = uniqueJobs(jobs);
   if (unique.length === 0 && config.sources.length + config.companyPages.length > 0) {
