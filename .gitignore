@@ -1,9 +1,14 @@
 .env
 .env.local
 node_modules/
+web/node_modules/
 .next/
+web/.next/
 out/
 coverage/
+web/coverage/
+web/.scraped-data/
+web/.local/
 data/
 tmp/
 *.log

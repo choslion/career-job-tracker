@@ -23,6 +23,7 @@ updated_at: 2026-08-07
 tags:
   - Next.js
   - TypeScript
+origin: application
 ---
 ```
 
@@ -39,6 +40,13 @@ tags:
 | `deadline` | `YYYY-MM-DD` | 선택 | 없음 |
 | `updated_at` | `YYYY-MM-DD` | 선택 | 파일 수정일 |
 | `tags` | string array | 선택 | 빈 배열 |
+| `origin` | `application` 또는 `discovered` | 선택 | `application` |
+| `source_name` | string | 수집 공고만 선택 | 없음 |
+| `match_score` | non-negative integer | 수집 공고만 선택 | 없음 |
+| `match_reasons` | string array | 수집 공고만 선택 | 빈 배열 |
+| `match_cautions` | string array | 수집 공고만 선택 | 빈 배열 |
+
+`application`은 사용자가 관리하는 지원 공고, `discovered`는 자동으로 찾은 새 공고다. 새 공고는 지원 상태 집계에 포함하지 않는다.
 
 지원 상태는 다음 값만 사용한다.
 

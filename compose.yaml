@@ -1,0 +1,26 @@
+services:
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    environment:
+      CAREER_DATA_DIR: /data/career
+      NEXT_TELEMETRY_DISABLED: "1"
+    init: true
+    ports:
+      - "3000:3000"
+    volumes:
+      - type: bind
+        source: ${CAREER_DATA_PATH:-./fixtures}
+        target: /data/career
+        read_only: true
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3

@@ -1,0 +1,23 @@
+# 공고 검색에 필요한 최소 정보만 적습니다.
+# 이름, 이메일, 전화번호, 이력서 본문은 넣지 않습니다.
+roles:
+  - 프론트엔드 개발자
+  - Frontend Engineer
+
+skills:
+  - React
+  - TypeScript
+  - Next.js
+
+locations:
+  - 서울
+  - 경기
+  - 원격
+
+experience:
+  min_years: 2
+  max_years: 5
+
+exclude_keywords:
+  - 파견
+  - 프리랜서

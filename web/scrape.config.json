@@ -1,0 +1,60 @@
+{
+  "enabled": true,
+  "cacheHours": 6,
+  "requestDelayMs": 600,
+  "maxItemsPerSource": 30,
+  "candidateLimitPerSource": 120,
+  "maxListingPages": 5,
+  "keywords": [
+    "프론트엔드",
+    "프론트 엔드",
+    "프론트",
+    "frontend",
+    "front-end",
+    "FE Developer",
+    "FE 개발",
+    "웹개발",
+    "웹 개발",
+    "웹퍼블리셔",
+    "웹 퍼블리셔",
+    "퍼블리셔",
+    "퍼블리싱",
+    "UI 개발",
+    "react",
+    "typescript",
+    "next.js"
+  ],
+  "sources": [
+    {
+      "type": "jobkorea",
+      "name": "잡코리아 · 프론트엔드",
+      "url": "https://www.jobkorea.co.kr/recruit/joblist?duty=1000230"
+    },
+    {
+      "type": "jobkorea",
+      "name": "잡코리아 · 웹퍼블리싱",
+      "url": "https://www.jobkorea.co.kr/recruit/joblist?duty=1000245"
+    },
+    {
+      "type": "wanted",
+      "name": "원티드",
+      "url": "https://www.wanted.co.kr/api/v4/jobs?country=kr&tag_type_ids=518&job_sort=job.latest_order&locations=all&years=-1&limit=100&offset=0"
+    },
+    {
+      "type": "saramin",
+      "name": "사람인",
+      "url": "https://www.saramin.co.kr/zf_user/jobs/list/job-category?cat_mcls=2"
+    },
+    {
+      "type": "saramin",
+      "name": "사람인 검색 · 프론트엔드",
+      "url": "https://www.saramin.co.kr/zf_user/search?searchType=search&searchword=%ED%94%84%EB%A1%A0%ED%8A%B8%EC%97%94%EB%93%9C"
+    },
+    {
+      "type": "saramin",
+      "name": "사람인 검색 · 웹퍼블리셔",
+      "url": "https://www.saramin.co.kr/zf_user/search?searchType=search&searchword=%EC%9B%B9%ED%8D%BC%EB%B8%94%EB%A6%AC%EC%85%94"
+    }
+  ],
+  "companyPages": []
+}
