@@ -1,8 +1,17 @@
 import { load } from "cheerio";
 
+import { detectRegion } from "../jobs/classify";
 import type { ScrapedJob } from "./types";
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+
+function firstLocation(...candidates: (string | null | undefined)[]): string | null {
+  for (const candidate of candidates) {
+    const value = text(candidate).replace(/\s+/g, " ").slice(0, 60);
+    if (value) return value;
+  }
+  return null;
+}
 
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -61,6 +70,18 @@ function findJobPostingNodes(value: unknown): Record<string, unknown>[] {
   return [...own, ...Object.values(record).flatMap(findJobPostingNodes)];
 }
 
+function jsonLdLocation(node: Record<string, unknown>): string | null {
+  if (text(node.jobLocationType).toUpperCase().includes("TELECOMMUTE")) return "원격";
+
+  const rawNodes = Array.isArray(node.jobLocation) ? node.jobLocation : [node.jobLocation];
+  for (const value of rawNodes) {
+    const address = asRecord(asRecord(value)?.address);
+    const parts = [text(address?.addressRegion), text(address?.addressLocality)].filter(Boolean);
+    if (parts.length > 0) return parts.join(" ");
+  }
+  return null;
+}
+
 function idFromUrl(url: string): string {
   const parsed = new URL(url);
   const lastSegment = parsed.pathname.split("/").filter(Boolean).at(-1);
@@ -92,6 +113,8 @@ export function extractJsonLdJobs(html: string, pageUrl: string, source: string)
       .filter(Boolean)
       .slice(0, 8);
 
+    const description = htmlToReadableText(text(node.description));
+
     return [{
       source,
       externalId: text(asRecord(node.identifier)?.value) || idFromUrl(sourceUrl),
@@ -100,7 +123,8 @@ export function extractJsonLdJobs(html: string, pageUrl: string, source: string)
       sourceUrl,
       deadline: normalizeDeadline(node.validThrough),
       tags: [source, ...keywords],
-      description: htmlToReadableText(text(node.description)) || "공고 원문에서 자세한 내용을 확인해 주세요.",
+      location: firstLocation(jsonLdLocation(node), detectRegion(description)),
+      description: description || "공고 원문에서 자세한 내용을 확인해 주세요.",
     }];
   });
 }
@@ -181,6 +205,10 @@ export function extractSaraminJob(html: string, pageUrl: string, source: string)
     sourceUrl: pageUrl,
     deadline: normalizeDeadline(deadline),
     tags: [source],
+    location: firstLocation(
+      description.match(/근무지역\s*:?\s*([^\n·|]{2,40})/)?.[1],
+      detectRegion(`${description} ${position}`),
+    ),
     description: description ? `## 공고 요약\n\n${description}` : "공고 원문에서 자세한 내용을 확인해 주세요.",
   };
 }
@@ -241,6 +269,7 @@ export function extractJumpitJobs(payload: unknown, source: string): ScrapedJob[
       sourceUrl: `https://jumpit.saramin.co.kr/position/${encodeURIComponent(String(id))}`,
       deadline,
       tags: [source, ...stacks],
+      location: firstLocation(locations.join(", ")),
       description: [
         locations.length > 0 ? `근무지 · ${locations.join(", ")}` : "",
         career,
@@ -278,6 +307,7 @@ export function extractLeverJobs(payload: unknown, companyName: string, source: 
       sourceUrl,
       deadline: null,
       tags: [source, location, commitment].filter(Boolean),
+      location: firstLocation(location),
       description: publicAtsDescription([
         item.descriptionPlain,
         item.description,
@@ -308,6 +338,7 @@ export function extractAshbyJobs(payload: unknown, companyName: string, source: 
       sourceUrl,
       deadline: null,
       tags: [source, location, employment].filter(Boolean),
+      location: firstLocation(location),
       description: publicAtsDescription([item.descriptionPlain, item.descriptionHtml]),
     }];
   });
@@ -332,6 +363,7 @@ export function extractGreenhouseJobs(payload: unknown, companyName: string, sou
       sourceUrl,
       deadline: null,
       tags: [source, locationName].filter(Boolean),
+      location: firstLocation(locationName),
       description: publicAtsDescription([item.content]),
     }];
   });
@@ -356,18 +388,24 @@ function greetingOpenings(payload: unknown): Record<string, unknown>[] {
   return [];
 }
 
-function greetingMeta(opening: Record<string, unknown>): { tags: string[]; description: string } {
+function greetingMeta(
+  opening: Record<string, unknown>,
+): { tags: string[]; description: string; location: string | null } {
   const openingPosition = asRecord(opening.openingJobPosition);
   const positions = openingPosition?.openingJobPositions;
-  if (!Array.isArray(positions)) return { tags: [], description: "" };
+  if (!Array.isArray(positions)) return { tags: [], description: "", location: null };
   const tags: string[] = [];
   const descriptions: string[] = [];
+  const places: string[] = [];
 
   for (const value of positions) {
     const position = asRecord(value);
     const place = asRecord(position?.workspacePlace);
     const location = [text(place?.place), text(place?.detailPlace)].filter(Boolean).join(" ");
-    if (location) tags.push(location);
+    if (location) {
+      tags.push(location);
+      places.push(location);
+    }
     const employment = text(asRecord(position?.jobPositionEmployment)?.employmentType);
     if (employment) tags.push(employment);
     const career = asRecord(position?.jobPositionCareer);
@@ -380,7 +418,11 @@ function greetingMeta(opening: Record<string, unknown>): { tags: string[]; descr
       if (from !== null) descriptions.push(to === null ? `경력 ${from}년 이상` : `경력 ${from}~${to}년`);
     }
   }
-  return { tags: [...new Set(tags)], description: [...new Set(descriptions)].join(" · ") };
+  return {
+    tags: [...new Set(tags)],
+    description: [...new Set(descriptions)].join(" · "),
+    location: firstLocation(places[0]),
+  };
 }
 
 export function extractGreetingJobs(html: string, baseUrl: string, fallbackCompany: string, source: string): ScrapedJob[] {
@@ -409,6 +451,7 @@ export function extractGreetingJobs(html: string, baseUrl: string, fallbackCompa
       sourceUrl: `${origin}/ko/o/${encodeURIComponent(String(id))}`,
       deadline: normalizeDeadline(opening.dueDate),
       tags: [source, ...meta.tags],
+      location: meta.location,
       description: meta.description || "공고 원문에서 자세한 내용을 확인해 주세요.",
     }];
   });
@@ -437,6 +480,7 @@ export function extractWantedJob(payload: unknown, pageUrl: string, source: stri
   const skillTags = Array.isArray(job.skill_tags)
     ? job.skill_tags.map((item) => text(asRecord(item)?.title)).filter(Boolean).slice(0, 8)
     : [];
+  const address = asRecord(job.address);
 
   return {
     source,
@@ -446,6 +490,10 @@ export function extractWantedJob(payload: unknown, pageUrl: string, source: stri
     sourceUrl: pageUrl,
     deadline: normalizeDeadline(job.due_time),
     tags: [source, ...skillTags],
+    location: firstLocation(
+      text(address?.full_location) || text(address?.location),
+      detectRegion(sections),
+    ),
     description: sections || "공고 원문에서 자세한 내용을 확인해 주세요.",
   };
 }

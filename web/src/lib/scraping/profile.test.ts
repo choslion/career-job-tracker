@@ -16,6 +16,7 @@ const baseJob: ScrapedJob = {
   sourceUrl: "https://example.com/jobs/1",
   deadline: null,
   tags: ["React"],
+  location: "서울",
   description: "React와 TypeScript로 제품을 개발합니다. 경력 3년 이상",
 };
 

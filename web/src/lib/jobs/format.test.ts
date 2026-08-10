@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { getDeadlineLabel, getUpcomingJobs } from "./format";
-import type { Job } from "./types";
+import type { JobListItem } from "./types";
 
-const baseJob: Job = {
+const baseJob: JobListItem = {
   slug: "example",
   company: "Example",
   position: "Developer",
@@ -12,7 +12,7 @@ const baseJob: Job = {
   deadline: null,
   updatedAt: "2026-08-01",
   tags: [],
-  body: "",
+  location: null,
   relatedDocuments: { analysis: false, coverLetter: false, careerDescription: false, interview: false },
   warnings: [],
   origin: "application",
@@ -20,6 +20,8 @@ const baseJob: Job = {
   matchScore: null,
   matchReasons: [],
   matchCautions: [],
+  role: "other",
+  locationClass: "unknown",
 };
 
 describe("마감일 표시", () => {

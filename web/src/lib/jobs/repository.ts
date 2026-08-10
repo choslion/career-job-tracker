@@ -6,7 +6,9 @@ import path from "node:path";
 import { parseJobDocument } from "./parser";
 import {
   RELATED_DOCUMENTS,
+  toJobListItem,
   type Job,
+  type JobListResult,
   type JobsResult,
   type RelatedDocuments,
 } from "./types";
@@ -39,16 +41,16 @@ function bigrams(value: string): string[] {
   return Array.from({ length: value.length - 1 }, (_, index) => value.slice(index, index + 2));
 }
 
-function titleSimilarity(left: string, right: string): number {
-  const a = normalizePosition(left);
-  const b = normalizePosition(right);
+/** 이미 정규화된 직무명끼리 비교한다. 정규화 비용은 호출부에서 한 번만 치른다. */
+function normalizedTitleSimilarity(a: string, b: string): number {
   if (!a || !b) return 0;
   if (a === b) return 1;
   if (Math.min(a.length, b.length) >= 9 && (a.includes(b) || b.includes(a))) {
     return Math.min(a.length, b.length) / Math.max(a.length, b.length);
   }
+  const rightBigrams = bigrams(b);
   const rightCounts = new Map<string, number>();
-  for (const gram of bigrams(b)) rightCounts.set(gram, (rightCounts.get(gram) ?? 0) + 1);
+  for (const gram of rightBigrams) rightCounts.set(gram, (rightCounts.get(gram) ?? 0) + 1);
   let overlap = 0;
   const leftBigrams = bigrams(a);
   for (const gram of leftBigrams) {
@@ -57,7 +59,7 @@ function titleSimilarity(left: string, right: string): number {
     overlap += 1;
     rightCounts.set(gram, count - 1);
   }
-  return (2 * overlap) / (leftBigrams.length + bigrams(b).length);
+  return (2 * overlap) / (leftBigrams.length + rightBigrams.length);
 }
 
 function sourcePriority(job: Job): number {
@@ -71,22 +73,39 @@ function sourcePriority(job: Job): number {
   return 6;
 }
 
+interface DedupeEntry {
+  job: Job;
+  position: string;
+  priority: number;
+}
+
 export function dedupeJobs(input: Job[]): Job[] {
-  const jobs: Job[] = [];
+  const entries: DedupeEntry[] = [];
+  // 정규화한 회사명으로 후보를 묶어, 비교를 같은 회사 안에서만 한다.
+  const indexesByCompany = new Map<string, number[]>();
+
   for (const candidate of input) {
     const company = normalizeCompany(candidate.company);
-    const existingIndex = jobs.findIndex((job) =>
-      normalizeCompany(job.company) === company && titleSimilarity(job.position, candidate.position) >= 0.9,
+    const position = normalizePosition(candidate.position);
+    const priority = sourcePriority(candidate);
+    const bucket = indexesByCompany.get(company);
+    const existingIndex = bucket?.find(
+      (index) => normalizedTitleSimilarity(entries[index]!.position, position) >= 0.9,
     );
-    if (existingIndex === -1) {
-      jobs.push(candidate);
+
+    if (existingIndex === undefined) {
+      entries.push({ job: candidate, position, priority });
+      if (bucket) bucket.push(entries.length - 1);
+      else indexesByCompany.set(company, [entries.length - 1]);
       continue;
     }
-    if (sourcePriority(candidate) < sourcePriority(jobs[existingIndex]!)) {
-      jobs[existingIndex] = candidate;
+
+    if (priority < entries[existingIndex]!.priority) {
+      entries[existingIndex] = { job: candidate, position, priority };
     }
   }
-  return jobs;
+
+  return entries.map((entry) => entry.job);
 }
 
 export async function detectRelatedDocuments(directory: string): Promise<RelatedDocuments> {
@@ -195,16 +214,15 @@ async function scanRoot(root: string): Promise<{ available: boolean; jobs: Job[]
   };
 }
 
-export function decodeJobSlug(slug: string): string {
-  try {
-    return decodeURIComponent(slug);
-  } catch {
-    // 잘못된 퍼센트 인코딩은 원문 그대로 조회해 안전하게 not-found 처리한다.
-    return slug;
-  }
-}
-
-export async function getJob(slug: string) {
+/**
+ * 화면이 사용하는 유일한 진입점. 공고 본문을 떼어낸 목록만 반환해
+ * 서버 렌더링과 클라이언트 전송에서 본문을 다루지 않는다.
+ */
+export async function getJobListItems(): Promise<JobListResult> {
   const result = await getJobs();
-  return { result, job: result.jobs.find((item) => item.slug === decodeJobSlug(slug)) ?? null };
+  return {
+    state: result.state,
+    jobs: result.jobs.map(toJobListItem),
+    skippedCount: result.skippedCount,
+  };
 }

@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { filterAndSortJobs } from "./query";
-import type { Job } from "./types";
+import { toJobListItem, type Job, type JobListItem } from "./types";
 
-function job(overrides: Partial<Job>): Job {
-  return {
+/** 화면이 받는 형태 그대로 검증하려고 서버 변환(`toJobListItem`)을 거친다. */
+function job(overrides: Partial<Job>): JobListItem {
+  return toJobListItem({
     slug: "default",
     company: "Example",
     position: "Developer",
@@ -13,6 +14,7 @@ function job(overrides: Partial<Job>): Job {
     deadline: null,
     updatedAt: "2026-08-01",
     tags: [],
+    location: null,
     body: "",
     relatedDocuments: {
       analysis: false,
@@ -27,7 +29,7 @@ function job(overrides: Partial<Job>): Job {
     matchReasons: [],
     matchCautions: [],
     ...overrides,
-  };
+  });
 }
 
 const jobs = [
@@ -97,10 +99,10 @@ describe("filterAndSortJobs", () => {
 
   it("기본 목록에서는 서울·경기 공고를 먼저, 다른 지역 공고를 마지막에 둔다", () => {
     const locationJobs = [
-      job({ slug: "seoul", body: "근무지 서울 강남구" }),
+      job({ slug: "seoul", location: "서울 강남구" }),
       job({ slug: "gyeonggi", tags: ["경기 성남시"] }),
-      job({ slug: "busan", body: "근무지 부산 해운대구" }),
-      job({ slug: "unknown", body: "근무지는 협의 후 결정" }),
+      job({ slug: "busan", location: "부산 해운대구" }),
+      job({ slug: "unknown", location: null }),
     ];
 
     expect(filterAndSortJobs(locationJobs, {}).map((item) => item.slug)).toEqual([

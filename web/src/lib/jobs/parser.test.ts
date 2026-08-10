@@ -48,6 +48,23 @@ tags:
     expect(job.body).toContain("공고 본문입니다.");
   });
 
+  it("front matter의 근무지를 그대로 쓰고, 없으면 본문에서 지역을 찾는다", () => {
+    const declared = parse(`---
+company: Example
+position: Developer
+location: 서울 강남구
+---
+# Developer
+
+부산 지사 이야기`);
+    expect(declared.location).toBe("서울 강남구");
+
+    const inferred = parse("# Developer\n\n근무지는 경기 성남시입니다.");
+    expect(inferred.location).toBe("경기");
+
+    expect(parse("# Developer\n\n근무지 협의").location).toBeNull();
+  });
+
   it("마감일 누락을 정상적인 미정 상태로 유지한다", () => {
     const job = parse(`---
 company: Example

@@ -1,11 +1,16 @@
-import Link from "next/link";
-
 import { formatKoreanDate, getDeadlineLabel } from "@/lib/jobs/format";
-import type { Job } from "@/lib/jobs/types";
+import { RELATED_DOCUMENTS, type JobListItem } from "@/lib/jobs/types";
 
 import { StatusBadge } from "./status-badge";
 
-export function JobCard({ job }: { job: Job }) {
+const RELATED_DOCUMENT_ENTRIES = Object.entries(RELATED_DOCUMENTS) as [
+  keyof typeof RELATED_DOCUMENTS,
+  (typeof RELATED_DOCUMENTS)[keyof typeof RELATED_DOCUMENTS],
+][];
+
+export function JobCard({ job }: { job: JobListItem }) {
+  const preparedDocuments = RELATED_DOCUMENT_ENTRIES.filter(([key]) => job.relatedDocuments[key]);
+
   return (
     <article className="job-card">
       <div className="job-card__top">
@@ -20,11 +25,26 @@ export function JobCard({ job }: { job: Job }) {
       </div>
       <div>
         <p className="job-card__company">{job.company}</p>
-        <h2><Link href={`/jobs/${job.slug}`}>{job.position}</Link></h2>
+        <h2>
+          {job.sourceUrl ? (
+            <a href={job.sourceUrl} rel="noopener noreferrer" target="_blank">
+              {job.position}
+              <span aria-hidden="true"> ↗</span>
+              <span className="sr-only">(원문 채용공고, 새 탭에서 열림)</span>
+            </a>
+          ) : (
+            job.position
+          )}
+        </h2>
       </div>
+      {(job.location || job.sourceName) && (
+        <p className="job-card__facts">
+          {[job.location, job.sourceName].filter(Boolean).join(" · ")}
+        </p>
+      )}
       {job.tags.length > 0 && (
         <ul className="tag-list" aria-label="태그">
-          {job.tags.map((tag) => <li key={tag}>{tag}</li>)}
+          {job.tags.slice(0, 8).map((tag) => <li key={tag}>{tag}</li>)}
         </ul>
       )}
       {job.origin === "discovered" && job.matchReasons.length > 0 && (
@@ -44,18 +64,22 @@ export function JobCard({ job }: { job: Job }) {
           </ul>
         </div>
       )}
+      {preparedDocuments.length > 0 && (
+        <ul className="document-chips" aria-label="준비된 관련 문서">
+          {preparedDocuments.map(([key, definition]) => (
+            <li key={key}><span aria-hidden="true">✓</span> {definition.label}</li>
+          ))}
+        </ul>
+      )}
       <div className="job-card__footer">
         <span>
           {job.deadline ? `${formatKoreanDate(job.deadline)} 마감` : "마감일이 정해지지 않았어요"}
         </span>
-        <div className="job-card__actions">
-          <Link className="text-link" href={`/jobs/${job.slug}`}>상세 보기</Link>
-          {job.sourceUrl && (
-            <a className="source-link" href={job.sourceUrl} rel="noopener noreferrer" target="_blank">
-              원문 바로가기 ↗
-            </a>
-          )}
-        </div>
+        {job.sourceUrl && (
+          <a className="source-link" href={job.sourceUrl} rel="noopener noreferrer" target="_blank">
+            원문에서 상세 보기 ↗
+          </a>
+        )}
       </div>
     </article>
   );

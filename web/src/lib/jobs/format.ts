@@ -1,4 +1,4 @@
-import type { Job } from "./types";
+import type { JobListItem } from "./types";
 
 export function formatKoreanDate(value: string): string {
   const [year, month, day] = value.split("-").map(Number);
@@ -19,7 +19,11 @@ export function todayIsoDate(now = new Date()): string {
   return formatter.format(now);
 }
 
-export function getUpcomingJobs(jobs: Job[], limit = 5, today = todayIsoDate()): Job[] {
+export function getUpcomingJobs(
+  jobs: JobListItem[],
+  limit = 5,
+  today = todayIsoDate(),
+): JobListItem[] {
   return jobs
     .filter((job) => job.deadline !== null && job.deadline >= today)
     .sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? ""))

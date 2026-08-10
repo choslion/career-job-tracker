@@ -33,7 +33,6 @@ import type {
 const USER_AGENT = "CareerJobTracker/0.1 (+local-personal-job-search)";
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
 const MAX_PROFILE_BYTES = 64 * 1024;
-const MAX_DESCRIPTION_LENGTH = 60_000;
 const CONFIG_FILE = path.resolve(process.cwd(), "scrape.config.json");
 const DEFAULT_OUTPUT_DIRECTORY = path.resolve(process.cwd(), ".scraped-data");
 const LOCAL_PROFILE_FILE = path.resolve(process.cwd(), ".local", "search-profile.yaml");
@@ -579,16 +578,16 @@ async function writeJob(output: string, job: ScrapedJob): Promise<string> {
     tags: [...new Set(job.tags)].slice(0, 10),
     origin: "discovered",
     source_name: job.source,
+    ...(job.location ? { location: job.location } : {}),
     ...(job.matchScore !== undefined ? { match_score: job.matchScore } : {}),
     ...(job.matchReasons?.length ? { match_reasons: job.matchReasons } : {}),
     ...(job.matchCautions?.length ? { match_cautions: job.matchCautions } : {}),
   };
+  // 공고 본문은 저장하지 않는다. 상세 내용은 원문 링크에서 직접 확인한다.
   const body = [
     `# ${job.company} ${job.position}`,
     "",
-    `> ${job.source}의 공개 채용공고에서 자동 수집한 로컬 사본입니다. 지원 전 [원문](${job.sourceUrl})을 확인해 주세요.`,
-    "",
-    job.description.slice(0, MAX_DESCRIPTION_LENGTH),
+    `> ${job.source}에서 확인한 공개 채용공고입니다. 상세 내용은 [원문](${job.sourceUrl})에서 확인해 주세요.`,
   ].join("\n");
   const contents = `---\n${dumpYaml(metadata, { noRefs: true, lineWidth: -1 })}---\n\n${body}\n`;
   const target = path.join(directory, "job-posting.md");

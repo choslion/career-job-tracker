@@ -7,6 +7,7 @@ web/.next/
 out/
 coverage/
 web/coverage/
+web/tsconfig.tsbuildinfo
 web/.scraped-data/
 web/.local/
 data/

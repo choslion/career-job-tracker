@@ -1,3 +1,10 @@
+import {
+  classifyLocation,
+  classifyRole,
+  type ClassifiedJobLocation,
+  type ClassifiedJobRole,
+} from "./classify";
+
 export const JOB_STATUSES = [
   "interested",
   "preparing",
@@ -44,6 +51,7 @@ export interface Job {
   deadline: string | null;
   updatedAt: string;
   tags: string[];
+  location: string | null;
   body: string;
   relatedDocuments: RelatedDocuments;
   warnings: string[];
@@ -54,10 +62,34 @@ export interface Job {
   matchCautions: string[];
 }
 
+/**
+ * 브라우저로 내려보내는 공고 요약. 공고 본문(`body`)은 담지 않는다.
+ * 직무·지역 분류는 서버에서 한 번만 계산해 클라이언트 필터가 문자열을 다시 훑지 않게 한다.
+ */
+export type JobListItem = Omit<Job, "body"> & {
+  role: ClassifiedJobRole;
+  locationClass: ClassifiedJobLocation;
+};
+
+export function toJobListItem(job: Job): JobListItem {
+  const { body: _body, ...rest } = job;
+  return {
+    ...rest,
+    role: classifyRole(job),
+    locationClass: classifyLocation(job),
+  };
+}
+
 export type RepositoryState = "ready" | "not-configured" | "missing" | "empty";
 
 export interface JobsResult {
   state: RepositoryState;
   jobs: Job[];
+  skippedCount: number;
+}
+
+export interface JobListResult {
+  state: RepositoryState;
+  jobs: JobListItem[];
   skippedCount: number;
 }

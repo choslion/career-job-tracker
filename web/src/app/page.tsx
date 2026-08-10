@@ -4,13 +4,13 @@ import { JobCard } from "@/components/job-card";
 import { RepositoryStateNotice, SkippedDocumentsNotice } from "@/components/repository-state";
 import { StatusBadge } from "@/components/status-badge";
 import { formatKoreanDate, getDeadlineLabel, getUpcomingJobs } from "@/lib/jobs/format";
-import { getJobs } from "@/lib/jobs/repository";
+import { getJobListItems } from "@/lib/jobs/repository";
 import { JOB_STATUSES, STATUS_LABELS } from "@/lib/jobs/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const result = await getJobs();
+  const result = await getJobListItems();
   const applications = result.jobs.filter((job) => job.origin === "application");
   const discovered = result.jobs.filter((job) => job.origin === "discovered");
   const upcoming = getUpcomingJobs(applications);
@@ -64,7 +64,7 @@ export default async function DashboardPage() {
                   <p className="eyebrow">새 공고함</p>
                   <h2>프로필과 잘 맞는 공고</h2>
                 </div>
-                <Link className="text-link" href="/jobs?view=discovered">새 공고 전체 보기 →</Link>
+                <Link className="text-link" href="/jobs">새 공고 전체 보기 →</Link>
               </div>
               <div className="jobs-grid jobs-grid--preview">
                 {discovered
@@ -81,7 +81,7 @@ export default async function DashboardPage() {
                 <p className="eyebrow">다가오는 일정</p>
                 <h2>가까운 마감일</h2>
               </div>
-              <Link className="text-link" href="/jobs?sort=deadline-asc">전체 일정 보기 →</Link>
+              <Link className="text-link" href="/jobs">전체 일정 보기 →</Link>
             </div>
             {upcoming.length === 0 ? (
               <div className="soft-empty">
@@ -90,20 +90,36 @@ export default async function DashboardPage() {
               </div>
             ) : (
               <div className="deadline-list">
-                {upcoming.map((job) => (
-                  <Link className="deadline-row" href={`/jobs/${encodeURIComponent(job.slug)}`} key={job.slug}>
-                    <span className="deadline-row__date">
-                      <strong>{getDeadlineLabel(job.deadline)}</strong>
-                      <small>{job.deadline && formatKoreanDate(job.deadline)}</small>
-                    </span>
-                    <span className="deadline-row__job">
-                      <small>{job.company}</small>
-                      <strong>{job.position}</strong>
-                    </span>
-                    <StatusBadge status={job.status} />
-                    <span aria-hidden="true">→</span>
-                  </Link>
-                ))}
+                {upcoming.map((job) => {
+                  const content = (
+                    <>
+                      <span className="deadline-row__date">
+                        <strong>{getDeadlineLabel(job.deadline)}</strong>
+                        <small>{job.deadline && formatKoreanDate(job.deadline)}</small>
+                      </span>
+                      <span className="deadline-row__job">
+                        <small>{job.company}</small>
+                        <strong>{job.position}</strong>
+                      </span>
+                      <StatusBadge status={job.status} />
+                      <span aria-hidden="true">{job.sourceUrl ? "↗" : ""}</span>
+                    </>
+                  );
+
+                  return job.sourceUrl ? (
+                    <a
+                      className="deadline-row"
+                      href={job.sourceUrl}
+                      key={job.slug}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                    >
+                      {content}
+                    </a>
+                  ) : (
+                    <div className="deadline-row deadline-row--static" key={job.slug}>{content}</div>
+                  );
+                })}
               </div>
             )}
           </section>

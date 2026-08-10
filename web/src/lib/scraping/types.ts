@@ -35,6 +35,9 @@ export interface ScrapedJob {
   sourceUrl: string;
   deadline: string | null;
   tags: string[];
+  /** 근무지 원문. 본문을 저장하지 않으므로 지역 필터는 이 값만 사용한다. */
+  location: string | null;
+  /** 점수 계산에만 쓰는 휘발성 원문. 로컬 캐시에는 기록하지 않는다. */
   description: string;
   matchScore?: number;
   matchReasons?: string[];

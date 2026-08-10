@@ -8,7 +8,7 @@
 ${CAREER_DATA_DIR}/applications/<slug>/job-posting.md
 ```
 
-`<slug>`는 URL과 내부 식별자에 사용한다. 실제 호스트 경로는 브라우저에 노출하지 않는다.
+`<slug>`는 내부 식별자에 사용한다. 실제 호스트 경로는 브라우저에 노출하지 않는다.
 
 ## 권장 front matter
 
@@ -20,6 +20,7 @@ status: preparing
 source_url: https://example.com/jobs/123
 deadline: 2026-08-31
 updated_at: 2026-08-07
+location: 서울 강남구
 tags:
   - Next.js
   - TypeScript
@@ -27,7 +28,7 @@ origin: application
 ---
 ```
 
-본문은 일반 Markdown으로 작성한다.
+본문은 일반 Markdown으로 작성한다. 다만 앱은 본문을 화면에 렌더링하지 않는다. 공고 내용은 `source_url`의 원문에서 확인하고, 본문은 `location`이 없을 때 근무 지역을 추론하는 용도로만 읽는다.
 
 ## 필드
 
@@ -39,6 +40,7 @@ origin: application
 | `source_url` | URL string | 선택 | 없음 |
 | `deadline` | `YYYY-MM-DD` | 선택 | 없음 |
 | `updated_at` | `YYYY-MM-DD` | 선택 | 파일 수정일 |
+| `location` | string (60자 이하) | 선택 | 본문에서 찾은 지역 표기, 없으면 없음 |
 | `tags` | string array | 선택 | 빈 배열 |
 | `origin` | `application` 또는 `discovered` | 선택 | `application` |
 | `source_name` | string | 수집 공고만 선택 | 없음 |
@@ -85,4 +87,8 @@ origin: application
 | `career-description.md` | 경력기술서 |
 | `interview.md` | 면접 준비 |
 
-MVP에서는 관련 문서를 수정하지 않는다. 상세 본문 공개 범위는 서버 렌더링 경계를 유지하고, API를 추가할 경우 필요한 내용만 반환한다.
+MVP에서는 관련 문서를 수정하지 않는다. 관련 문서의 본문은 읽지 않고 존재 여부만 목록 카드에 표시한다.
+
+## 브라우저로 내려보내는 값
+
+목록 화면은 `JobListItem`을 받는다. 위 필드에서 공고 본문(`body`)을 뺀 값에 서버가 계산한 `role`(퍼블리싱·프론트엔드 분류)과 `locationClass`(선호 지역 여부)를 더한 형태다. 본문과 호스트 절대 경로는 어떤 경우에도 클라이언트로 보내지 않는다.

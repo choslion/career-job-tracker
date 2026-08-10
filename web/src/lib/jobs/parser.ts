@@ -2,6 +2,7 @@ import matter from "gray-matter";
 import { JSON_SCHEMA, load as loadYaml } from "js-yaml";
 import { z } from "zod";
 
+import { detectRegion } from "./classify";
 import {
   JOB_STATUSES,
   type Job,
@@ -21,6 +22,7 @@ const frontMatterSchema = z
     deadline: z.union([z.string(), z.date()]).optional(),
     updated_at: z.union([z.string(), z.date()]).optional(),
     tags: z.array(z.string().trim().min(1)).optional(),
+    location: z.string().trim().min(1).max(60).optional(),
     origin: z.enum(["application", "discovered"]).optional(),
     source_name: z.string().trim().min(1).optional(),
     match_score: z.number().int().min(0).max(10_000).optional(),
@@ -151,6 +153,8 @@ export function parseJobDocument(input: ParseJobInput): Job {
     deadline,
     updatedAt,
     tags: metadata.tags ?? [],
+    // front matter에 근무지가 없는 기존 문서는 본문에서 한 번만 추출한다.
+    location: metadata.location ?? detectRegion(body),
     body,
     relatedDocuments: input.relatedDocuments,
     warnings,

@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { decodeJobSlug, dedupeJobs, detectRelatedDocuments } from "./repository";
+import { dedupeJobs, detectRelatedDocuments } from "./repository";
 import type { Job } from "./types";
 
 const temporaryDirectories: string[] = [];
@@ -38,6 +38,7 @@ function job(overrides: Partial<Job>): Job {
     deadline: null,
     updatedAt: "2026-08-09",
     tags: [],
+    location: null,
     body: "",
     relatedDocuments: { analysis: false, coverLetter: false, careerDescription: false, interview: false },
     warnings: [],
@@ -68,13 +69,5 @@ describe("dedupeJobs", () => {
     ]);
 
     expect(result).toHaveLength(2);
-  });
-});
-
-describe("decodeJobSlug", () => {
-  it("한글 상세 경로의 퍼센트 인코딩을 실제 공고 slug로 되돌린다", () => {
-    const slug = "사람인-프론트엔드-예시회사";
-    expect(decodeJobSlug(encodeURIComponent(slug))).toBe(slug);
-    expect(decodeJobSlug(slug)).toBe(slug);
   });
 });
